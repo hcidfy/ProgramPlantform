@@ -125,6 +125,12 @@ services:
       APP_JUDGE_CONCURRENCY: ${APP_JUDGE_CONCURRENCY:-2}
       APP_JUDGE_MAX_QUEUE: ${APP_JUDGE_MAX_QUEUE:-20}
       APP_ASSIGNMENT_ALLOW_LATE: ${APP_ASSIGNMENT_ALLOW_LATE:-false}
+      # AI 编排服务（M3）：app 只通过内部网络调 ai
+      APP_AI_ENABLED: ${APP_AI_ENABLED:-true}
+      AI_BASE_URL: http://ai:8080
+      AI_INTERNAL_TOKEN: ${AI_INTERNAL_TOKEN:?请在 .env 里设置 AI_INTERNAL_TOKEN}
+      APP_AI_CACHE_TTL_MINUTES: ${APP_AI_CACHE_TTL_MINUTES:-30}
+      APP_AI_TIMEOUT_SECONDS: ${APP_AI_TIMEOUT_SECONDS:-25}
       JAVA_TOOL_OPTIONS: -Xmx640m -Xss512k
     volumes:
       - ./db:/app/db:ro
@@ -135,6 +141,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      ai:
+        condition: service_started
     mem_limit: 900m
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz || exit 1"]
@@ -142,6 +150,32 @@ services:
       timeout: 5s
       retries: 20
       start_period: 60s
+    restart: unless-stopped
+
+  ai:
+    build:
+      context: ../services/ai
+    container_name: codelab-ai
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      AI_MODEL: ${AI_MODEL:-qwen-plus}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      AI_TEMPERATURE: ${AI_TEMPERATURE:-0.3}
+      AI_MAX_TOKENS: ${AI_MAX_TOKENS:-1000}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-18}
+      AI_INTERNAL_TOKEN: ${AI_INTERNAL_TOKEN:?请在 .env 里设置 AI_INTERNAL_TOKEN}
+    # 不映射宿主机端口：ai 只在容器网络内被 app 调用（PRD §15.1 D6）
+    expose:
+      - "8080"
+    mem_limit: 300m
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/healthz')\""]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     restart: unless-stopped
 
   web:

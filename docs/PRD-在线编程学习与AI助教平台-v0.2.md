@@ -689,7 +689,97 @@ CREATE INDEX submissions_user_problem_idx ON submissions (user_id, problem_id, c
 
 ---
 
-## 15. 版本记录
+## 15. M3 接口契约（v0.2.3 追加）
+
+> M3 = `ai` 服务 4 条链 + 时间闸门 + 配额 + 不可复制 + 知识条目与问答（PRD §11）。冲突以正文为准。
+
+### 15.1 三处落地决策（需追认）
+
+| # | 决策 | 理由（可行性） |
+|-|-|-|
+| **D4** | `ai` 服务两种 provider：`openai`（DashScope/任意 OpenAI 兼容端点，**生产**）与 `stub`（**仅开发**：按提示词返回确定性结构化结果） | 本地没有 `DASHSCOPE_API_KEY`，又必须把"闸门→调用→校验→计量→渲染"整条链路跑通；stub 只是把模型换成确定性函数，链条与生产一致（同一条 LCEL） |
+| **D5** | AI 结果缓存放 **app 进程内**（TTL 30 min，键 `task + submission_id + level + prompt_version`），不新增 Redis 依赖 | 缓存是可丢数据（PRD §7.5）；单实例部署，进程内 Map 够用；重启只影响"白省一次调用" |
+| **D6** | `app → ai` 走内部 HTTP，带 `X-Internal-Token`；`ai` **不对外暴露端口**（仅 compose 内网） | ai 调用的上下文里有学生代码与题面，不能给公网直连；token 由 `.env` 生成 |
+
+### 15.2 时间闸门与"能不能用 AI"（FR-AI-00）
+
+`GET /api/student/problems/{problemId}/ai/status` →
+
+```json
+{ "hasSubmission": true, "passed": false, "canUseAi": true, "reason": null,
+  "hintLevelsAvailable": 3, "hintLevelsUnlocked": 1,
+  "perProblemCalls": 2, "perProblemCallLimit": 10,
+  "dailyTokens": 500, "dailyTokenLimit": 30000 }
+```
+
+| 状态 | 规则（PRD §8.2） |
+|-|-|
+| 该题**没有任何提交** | `canUseAi=false`，所有 S1 AI 接口 → **403 `AI_GATE_CLOSED`**，前端不渲染任何 AI 入口 |
+| 已提交（无论对错） | 答疑 / 思路（逐级）/ 分析 可用（受配额） |
+| 已通过 | 思路提示关闭（`hintLevelsAvailable=0`）；答疑与知识问答仍可用 |
+| 配额用尽 | `canUseAi=false`，原因写明；接口 → **429 `AI_QUOTA_EXCEEDED`** |
+
+### 15.3 S1 三条接口（答疑 / 思路 / 分析）
+
+| 方法 | 路径 | 请求 | 响应字段（PRD §8.1） |
+|-|-|-|-|
+| POST | `/api/student/problems/{problemId}/ai/explain` | `{submissionId?, question?, forceRefresh?}` | `location{line} cause why nextStep keySnippet` |
+| POST | `/api/student/problems/{problemId}/ai/hint` | `{submissionId?, level, forceRefresh?}` | `level concept direction outline` |
+| POST | `/api/student/problems/{problemId}/ai/analyze` | `{submissionId?, forceRefresh?}` | `diagnosis firstFailCase{seq,expected,actual} gap fixDirection checklist[]` |
+
+统一返回外层：`{ task, promptVersion, payload{...}, cached, usage{promptTokens,completionTokens}, remaining{perProblemCalls,dailyTokens} }`
+
+- `submissionId` 省略 → 取该题最近一次提交；不属于本人/该题 → 404。
+- **计费口径**：缓存命中不计费；**思路同一题同一级只计一次**（第二次直接复用已存回答，不再调模型）；`forceRefresh` 每个提交每 task 只允许 1 次。
+- **FR-AI-04 服务端硬约束**：`keySnippet` **≤5 行**、`outline` ≤12 行，任何字段**不得包含完整可提交代码**（ai 侧截断，app 侧二次校验）。
+- 超时（>20 s）/上游异常 → 502 `AI_UNAVAILABLE`，文案"AI 忙，先看判题结果"。
+
+### 15.4 S2 知识问答
+
+| 角色 | 接口 | 说明 |
+|-|-|-|
+| 教师 | `GET/POST /api/teacher/knowledge?courseId=` | 知识条目列表/新建（`{courseId,title,contentMd,tags[]}`） |
+| 教师 | `PUT /api/teacher/knowledge/{id}`、`POST /{id}/publish`、`DELETE /{id}` | 只有 draft 可改/删；发布后进检索池 |
+| 学生 | `POST /api/student/courses/{courseId}/ai/ask` | `{question, conversationId?}` → `{conversationId, segments[], citations[{entryId,title,contentMd}], uncertain, usage}` |
+| 学生 | `GET /api/student/courses/{courseId}/ai/conversations`、`GET /api/student/ai/conversations/{id}` | 会话列表 / 最近 20 条消息（保留最近 5 轮上下文给模型） |
+| 教师 | `GET /api/teacher/knowledge-qa?teachingClassId=&studentId=&page=&size=` | 本教学班学生的问答记录（要做审计 `teacher.view_qa`） |
+
+检索（PRD §8.3，无向量库）：`pg_trgm similarity()` + `title/content ILIKE` + 标签命中，取 **Top 5**（仅 `published`、限本课程）；
+无命中 → `uncertain=true`，回答里明确"课程资料里没有，以下是通用解释"。会话超 30 轮提示新建。
+
+### 15.5 配额与计量（PRD §5.3 / §8.4）
+
+| 项 | 默认 | 解析顺序 |
+|-|-|-|
+| 学生日 token 上限 | 30,000 | `ai_quotas(scope=student, scope_id=用户)` → `teaching_class` → `global` → 默认值 |
+| 单题 AI 次数上限 | 10（答疑 6 + 思路 3 + 分析 1 的合计口径） | 同上 |
+| 单次 `max_tokens` | 1,000 | 代码内固定 |
+| 计量 | 每次**实际调用**写 `ai_calls` 明细 + `ai_usage(user,date,task)` 累加 | — |
+| 超限 | 429 + 明确文案，当日不恢复 | — |
+
+### 15.6 表结构（V3 新增 8 张）
+
+| 表 | 关键字段 |
+|-|-|
+| `ai_conversations` | `user_id, kind(explain/hint/analyze/chat), course_id, problem_id, submission_id, level, created_at` |
+| `ai_messages` | `conversation_id, role(user/assistant), content jsonb, text, tokens, created_at` |
+| `ai_usage` | `user_id, date, task, calls, prompt_tokens, completion_tokens, cost_cents`；唯一 `(user_id,date,task)` |
+| `ai_quotas` | `scope(global/teaching_class/student), scope_id, daily_tokens, per_problem_calls`；唯一 `(scope,scope_id)` |
+| `ai_calls` | 调用流水：`user_id, problem_id, kind, level, submission_id, prompt_tokens, completion_tokens, charged, cached` |
+| `knowledge_entries` | `course_id, title, content_md, tags text[], status(draft/published), published_at, created_by` + `pg_trgm` GIN |
+| `prompt_templates` | `task, version, body, status(active/archived)`；V3 灌入 explain/hint/analyze/chat v1 |
+| `ai_feedback` | 占位（PRD G3 只保留接口位）：`message_id, user_id, useful` |
+
+### 15.7 本版新增待决策
+
+| # | 问题 | 默认（已按此实现） |
+|-|-|-|
+| Q10 | 教师错题本/FAQ 采纳 | 仍后置（V1），本期只留 `ai_feedback` 表 |
+| Q11 | 是否允许教师自定义提示词 | 表已就绪（`prompt_templates`），**暂不开放编辑入口**，改文案直接改库 |
+
+---
+
+## 16. 版本记录
 
 | 版本 | 日期 | 变更 |
 |-|-|-|
@@ -697,3 +787,4 @@ CREATE INDEX submissions_user_problem_idx ON submissions (user_id, problem_id, c
 | v0.2 | 2026-10-25 | 按"2C4G 单机 + 单人开发"重构：删 TA/沙箱/向量/可观测/CI/测试/社区；两服务；三角色 + token 配额；两服务定位（答题解疑 / AI 知识问答）；AI 时间闸门 + 不可复制；G1 改为"帮助用户借助 AI 完成题目"；规模降至 ≤150 注册 / ≤500 提交/日，并给出 2C4G 内存账本 |
 | v0.2.1 | 2026-10-26 | **M1 落地契约**（新增 §13）：认证/管理端/教师端/学生端接口与状态码约定、JWT 与 refresh cookie 细则、失败锁定、`users`+`auth_sessions` 字段增补、`schema_migrations` 迁移器、新增待决策 Q7~Q9（教师不自助注册 / 管理员由 env 幂等创建 / 锁定按账号） |
 | v0.2.2 | 2026-10-26 | **M2 落地契约**（新增 §14）：题库/用例/图片/作业/提交/判题接口与口径；三处落地决策 D1（判题先走 PG 队列，MQ 后置）/ D2（FileStorage 双实现，local 仅开发）/ D3（运行镜像换 JDK+python3、判题降权用户）；`judge_queue`/`files` 新表与若干字段增补 |
+| v0.2.3 | 2026-10-26 | **M3 落地契约**（新增 §15）：时间闸门与 ai/status、三条 S1 接口与计费口径、S2 知识问答与检索、配额解析、V3 八张表；新增决策 D4（stub provider 仅开发）/ D5（结果缓存进程内）/ D6（内部 token、ai 不对外暴露）与 Q10~Q11 |

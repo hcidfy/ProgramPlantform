@@ -33,3 +33,8 @@ desktop.ini
 judge-work/
 storage/
 
+
+# Python（ai 服务本地运行产物）
+__pycache__/
+*.pyc
+

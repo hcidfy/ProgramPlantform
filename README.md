@@ -12,7 +12,7 @@
 |-|-|
 | **M1** 仓库骨架 / 中间件编排 / 数据库迁移 / 账号 / 组织模型 / 前端最小页 / 部署脚本 | ✅ 已交付（验收见 `scripts/m1-acceptance.sh`） |
 | **M2** 题库 + 用例 + 图片 + 作业 + Monaco 做题页 + 提交判题 + 结果页 | ✅ 已交付（教师布置 2 题 → 学生一过一错 → 结果页信息完整，51 项自动断言全绿） |
-| M3 `ai` 服务 4 条链 + 时间闸门 + 配额 | 未开始 |
+| **M3** `ai` 服务 4 条链 + 时间闸门 + 配额 + 不可复制 + 知识条目与问答 | ✅ 已交付（提交前 AI 全 403；提交后答疑/三级思路/分析可用；同级不重复计费；超配额 429；知识问答带引用与不确定态；48 项自动断言全绿） |
 | M4 统计 / 管理端配额与用量 / 备份 | 未开始 |
 
 ## 目录
@@ -27,7 +27,7 @@ deploy/
   rocketmq/                broker 配置
 services/
   app/                     Java 21 + Spring Boot 4 单体（M1：账号 + 组织模型）
-  ai/                      Python 3.12 + FastAPI + LangChain（M3 开始）
+  ai/                      Python 3.12 + FastAPI + LangChain LCEL（4 条链；本地可用 stub provider）
 web/                       Vue 3 + Vite + TS，构建后由 Nginx 托管
 scripts/                   deploy.sh（一键部署）、m1-acceptance.sh（验收自验）
 ```
@@ -83,6 +83,10 @@ cp .env.example .env && vi .env     # 密钥全部换掉
 | 教师端（作业，M2） | `/api/teacher/assignments`（建/改/发布/进度/学生提交）、`POST /api/teacher/submissions/{id}/rejudge` |
 | 学生端（做题，M2） | `/api/student/assignments`、`/api/student/problems/{id}`、`POST /api/student/submissions`、`/api/student/submissions/{id}` |
 | 文件 | `GET /api/files/{id}`（题目图片，需登录且有权看该题） |
+| AI（S1，M3） | `GET /api/student/problems/{id}/ai/status`、`POST .../ai/explain` `/ai/hint` `/ai/analyze` |
+| AI（S2 问答，M3） | `POST /api/student/courses/{courseId}/ai/ask`、`GET .../ai/conversations`、`GET /api/student/ai/conversations/{id}` |
+| 知识条目（教师） | `/api/teacher/knowledge`（增改/发布/删除）、`GET /api/teacher/knowledge-qa` |
+| ai 服务内部 | `/internal/explain` `/internal/hint` `/internal/analyze` `/internal/chat`（带 `X-Internal-Token`，不对外） |
 | 健康 | `GET /healthz` |
 
 契约细则（状态码、JWT、refresh cookie、失败锁定、分页）见 PRD **§13**。
@@ -117,6 +121,8 @@ cp .env.example .env && vi .env     # 密钥全部换掉
 | 前端 `vite` / `@vitejs/plugin-vue` / `typescript` | 构建期工具，PRD 指定 Vite + TS | — |
 | 前端 `monaco-editor` | PRD §7.2 指定 Monaco 作为在线编辑器 | 做不到"手写一个带 Java/Python 高亮的编辑器" |
 | 前端 `marked` | 题面是 Markdown（FR-PRB-01） | Markdown 解析规范庞杂，自写会踩一堆边界 |
+| Python `fastapi` / `uvicorn` / `langchain` / `langchain-openai` | PRD §7.2 指定 FastAPI + LangChain LCEL | — |
+| **没有** 向量库 / embedding 模型 | — | 知识量 <500 条，`pg_trgm` + 标签足够（PRD §8.3 已写明取舍） |
 | **没有** JWT 库 | — | 只需 HS256 签发/校验，手写 100 行（`JwtService`） |
 | **没有** Flyway | — | 迁移器只需"按文件名执行 + 记录版本"，手写 60 行（`MigrationRunner`） |
 | **没有** actuator | PRD 依赖白名单里没有它 | 一个 `/healthz` 查询足够给 compose healthcheck 用 |

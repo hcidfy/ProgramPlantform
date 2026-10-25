@@ -6,11 +6,13 @@ import StudentCoursesView from './views/StudentCoursesView.vue'
 import StudentAssignmentsView from './views/StudentAssignmentsView.vue'
 import StudentAssignmentDetailView from './views/StudentAssignmentDetailView.vue'
 import StudentSubmissionsView from './views/StudentSubmissionsView.vue'
+import StudentKnowledgeView from './views/StudentKnowledgeView.vue'
 import TeacherClassesView from './views/TeacherClassesView.vue'
 import TeacherProblemsView from './views/TeacherProblemsView.vue'
 import TeacherProblemEditView from './views/TeacherProblemEditView.vue'
 import TeacherAssignmentsView from './views/TeacherAssignmentsView.vue'
 import TeacherAssignmentDetailView from './views/TeacherAssignmentDetailView.vue'
+import TeacherKnowledgeView from './views/TeacherKnowledgeView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -28,12 +30,14 @@ const router = createRouter({
       meta: { role: 'student' }
     },
     { path: '/student/submissions', component: StudentSubmissionsView, meta: { role: 'student' } },
+    { path: '/student/knowledge', component: StudentKnowledgeView, meta: { role: 'student' } },
 
     { path: '/teacher', component: TeacherClassesView, meta: { role: 'teacher' } },
     { path: '/teacher/problems', component: TeacherProblemsView, meta: { role: 'teacher' } },
     { path: '/teacher/problems/:id', component: TeacherProblemEditView, meta: { role: 'teacher' } },
     { path: '/teacher/assignments', component: TeacherAssignmentsView, meta: { role: 'teacher' } },
     { path: '/teacher/assignments/:id', component: TeacherAssignmentDetailView, meta: { role: 'teacher' } },
+    { path: '/teacher/knowledge', component: TeacherKnowledgeView, meta: { role: 'teacher' } },
 
     { path: '/admin', component: AdminHomeView, meta: { role: 'admin' } },
     { path: '/:pathMatch(.*)*', redirect: '/login' }

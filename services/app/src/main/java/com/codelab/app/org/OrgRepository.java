@@ -265,6 +265,37 @@ public class OrgRepository {
                 .isPresent();
     }
 
+    /** 学生是否在其行政班的某门课程教学班里（S2 问答的权限边界）。 */
+    public boolean studentHasCourse(UUID studentId, UUID courseId) {
+        return jdbc.sql("""
+                        SELECT 1
+                          FROM teaching_classes tc
+                          JOIN enrollments e ON e.class_id = tc.class_id
+                         WHERE e.student_id = :studentId AND tc.course_id = :courseId
+                         LIMIT 1
+                        """)
+                .param("studentId", studentId)
+                .param("courseId", courseId)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    /** 学生所在行政班 × 题目所属课程 → 教学班（配额按教学班覆盖时用）。 */
+    public Optional<UUID> findTeachingClassIdByStudentAndCourse(UUID studentId, UUID courseId) {
+        return jdbc.sql("""
+                        SELECT tc.id
+                          FROM teaching_classes tc
+                          JOIN enrollments e ON e.class_id = tc.class_id
+                         WHERE e.student_id = :studentId AND tc.course_id = :courseId
+                         LIMIT 1
+                        """)
+                .param("studentId", studentId)
+                .param("courseId", courseId)
+                .query(UUID.class)
+                .optional();
+    }
+
     public Optional<UUID> findCourseIdByTeachingClass(UUID teachingClassId) {
         return jdbc.sql("SELECT course_id FROM teaching_classes WHERE id = :id")
                 .param("id", teachingClassId)

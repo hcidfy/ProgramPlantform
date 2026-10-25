@@ -30,4 +30,12 @@ public final class AuditActions {
     public static final String STUDENT_SUBMIT = "student.submission.create";
     public static final String TEACHER_VIEW_CODE = "teacher.view_code";
     public static final String TEACHER_REJUDGE = "teacher.rejudge";
+
+    public static final String AI_CALL = "ai.call";
+    public static final String AI_QUOTA_EXCEEDED = "ai.quota.exceeded";
+    public static final String KNOWLEDGE_CREATE = "teacher.knowledge.create";
+    public static final String KNOWLEDGE_UPDATE = "teacher.knowledge.update";
+    public static final String KNOWLEDGE_PUBLISH = "teacher.knowledge.publish";
+    public static final String KNOWLEDGE_DELETE = "teacher.knowledge.delete";
+    public static final String TEACHER_VIEW_QA = "teacher.view_qa";
 }

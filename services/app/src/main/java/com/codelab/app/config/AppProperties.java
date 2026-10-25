@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /** 应用自有配置（前缀 app.*），见 application.yml。 */
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(Jwt jwt, Admin admin, Migration migration, Security security, Cors cors,
-        Storage storage, Judge judge, Assignment assignment) {
+        Storage storage, Judge judge, Assignment assignment, Ai ai) {
 
     public record Jwt(String secret, String issuer, Duration accessTtl, Duration refreshTtl) {
     }
@@ -37,5 +37,10 @@ public record AppProperties(Jwt jwt, Admin admin, Migration migration, Security 
 
     /** 作业行为开关（FR-TCH-02）。 */
     public record Assignment(boolean allowLate) {
+    }
+
+    /** AI 编排服务（PRD §15.1 D4~D6）。 */
+    public record Ai(boolean enabled, String baseUrl, String internalToken, int cacheTtlMinutes,
+            int timeoutSeconds, int maxTokens, boolean stub) {
     }
 }

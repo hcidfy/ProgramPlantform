@@ -8,13 +8,15 @@ const links = computed(() => {
       return [
         { to: '/student', label: '我的课程' },
         { to: '/student/assignments', label: '我的作业' },
-        { to: '/student/submissions', label: '我的提交' }
+        { to: '/student/submissions', label: '我的提交' },
+        { to: '/student/knowledge', label: '课程问答' }
       ]
     case 'teacher':
       return [
         { to: '/teacher', label: '我的教学班' },
         { to: '/teacher/problems', label: '题库' },
-        { to: '/teacher/assignments', label: '作业' }
+        { to: '/teacher/assignments', label: '作业' },
+        { to: '/teacher/knowledge', label: '知识库' }
       ]
     case 'admin':
       return [{ to: '/admin', label: '管理端' }]

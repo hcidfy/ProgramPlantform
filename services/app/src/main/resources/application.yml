@@ -65,6 +65,17 @@ app:
     # FR-TCH-02：截止后仍可看题，是否可提交由这个开关决定
     allow-late: ${APP_ASSIGNMENT_ALLOW_LATE:false}
 
+  # AI 编排服务（M3）：app 只通过内部 HTTP 调它，不直接调模型
+  ai:
+    enabled: ${APP_AI_ENABLED:true}
+    base-url: ${AI_BASE_URL:http://127.0.0.1:8081}
+    internal-token: ${AI_INTERNAL_TOKEN:dev-internal-token-change-me}
+    cache-ttl-minutes: ${APP_AI_CACHE_TTL_MINUTES:30}
+    timeout-seconds: ${APP_AI_TIMEOUT_SECONDS:25}
+    max-tokens: ${APP_AI_MAX_TOKENS:1000}
+    # 仅用于日志提示：ai 侧真实 provider 由 AI_PROVIDER 决定
+    stub: ${APP_AI_STUB:true}
+
 logging:
   level:
     root: INFO

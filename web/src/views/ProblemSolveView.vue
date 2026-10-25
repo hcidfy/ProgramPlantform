@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import AiAnswer from '../components/AiAnswer.vue'
 import CodeEditor from '../components/CodeEditor.vue'
 import { ApiError, getAccessToken, request } from '../api'
 import { caseStatusLabel, formatTime, resultLabel, resultClass, submissionStatusLabel } from '../labels'
 import { hydrateAuthImages, renderMarkdown } from '../markdown'
 import type { StudentProblemView, SubmissionView } from '../types'
+import type { AiAnswer as AiAnswerData, AiStatus } from '../ai-types'
 
 const route = useRoute()
 const problemId = String(route.params.id)
@@ -19,9 +21,25 @@ const submission = ref<SubmissionView | null>(null)
 const busy = ref(false)
 const error = ref('')
 const notice = ref('')
+
+const aiStatus = ref<AiStatus | null>(null)
+const aiAnswer = ref<AiAnswerData | null>(null)
+const aiBusy = ref(false)
+const aiError = ref('')
+
 let pollTimer: number | null = null
 
 const languageForEditor = (language?: string) => (language === 'python3' ? 'python' : 'java')
+
+const canHint = (level: number) =>
+  !!aiStatus.value && !aiStatus.value.passed && level <= aiStatus.value.hintLevelsUnlocked + 1
+
+const aiRemainingText = computed(() => {
+  if (!aiStatus.value) {
+    return ''
+  }
+  return `本题 ${aiStatus.value.perProblemCalls}/${aiStatus.value.perProblemCallLimit} 次 · 今日 ${aiStatus.value.dailyTokens}/${aiStatus.value.dailyTokenLimit} tokens`
+})
 
 async function loadProblem() {
   try {
@@ -43,6 +61,14 @@ function defaultTemplate(language: string): string {
     return 'a, b = map(int, input().split())\nprint(a + b)\n'
   }
   return `import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // TODO\n    }\n}\n`
+}
+
+async function loadAiStatus() {
+  try {
+    aiStatus.value = await request<AiStatus>(`/api/student/problems/${problemId}/ai/status`)
+  } catch {
+    aiStatus.value = null
+  }
 }
 
 async function submit() {
@@ -80,6 +106,7 @@ function startPolling(id: string) {
       if (view.status === 'done' || view.status === 'judge_error') {
         stopPolling()
         notice.value = ''
+        await loadAiStatus()
       }
     } catch {
       stopPolling()
@@ -94,16 +121,46 @@ function stopPolling() {
   }
 }
 
-watch(() => problem.value?.language, () => {
-  /* 语言由题目决定，客户端不可改 */
-})
+async function callAi(task: 'explain' | 'hint' | 'analyze', extra: Record<string, unknown> = {}, forceRefresh = false) {
+  aiBusy.value = true
+  aiError.value = ''
+  try {
+    const body = {
+      submissionId: submission.value?.id ?? null,
+      forceRefresh,
+      ...extra
+    }
+    aiAnswer.value = await request<AiAnswerData>(`/api/student/problems/${problemId}/ai/${task}`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    })
+    await loadAiStatus()
+  } catch (err) {
+    aiError.value = err instanceof ApiError ? err.message : 'AI 调用失败'
+  } finally {
+    aiBusy.value = false
+  }
+}
 
-onMounted(loadProblem)
+async function refreshAiAnswer() {
+  if (!aiAnswer.value) {
+    return
+  }
+  const level = aiAnswer.value.task === 'hint' ? Number(aiAnswer.value.payload.level ?? 1) : undefined
+  await callAi(aiAnswer.value.task as 'explain' | 'hint' | 'analyze', level ? { level } : {}, true)
+}
+
+onMounted(async () => {
+  await loadProblem()
+  await loadAiStatus()
+})
 onBeforeUnmount(stopPolling)
 </script>
 
 <template>
-  <p><router-link :to="assignmentId ? `/student/assignments/${assignmentId}` : '/student/assignments'">← 返回作业</router-link></p>
+  <p>
+    <router-link :to="assignmentId ? `/student/assignments/${assignmentId}` : '/student/assignments'">← 返回作业</router-link>
+  </p>
 
   <p v-if="error" class="error">{{ error }}</p>
   <p v-if="!problem && !error" class="meta">加载中…</p>
@@ -115,7 +172,7 @@ onBeforeUnmount(stopPolling)
       {{ Math.round(problem.memLimitKb / 1024) }} MB
     </p>
 
-    <div class="card statement" ref="statementHost" v-html="statementHtml" />
+    <div ref="statementHost" class="card statement" v-html="statementHtml" />
 
     <div class="toolbar">
       <h2>我的代码</h2>
@@ -167,6 +224,45 @@ onBeforeUnmount(stopPolling)
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- 时间闸门：提交前这里不渲染任何 AI 入口（FR-AI-00） -->
+    <div v-if="aiStatus" class="card ai-panel">
+      <h2>和 AI 讨论这道题</h2>
+
+      <p v-if="!aiStatus.hasSubmission" class="meta">
+        提交后才能与 AI 讨论你的代码。先交一次，回来看看哪里可以改。
+      </p>
+
+      <template v-else>
+        <p v-if="aiStatus.reason" class="pill warn">{{ aiStatus.reason }}</p>
+        <div class="ai-actions">
+          <button class="primary small" type="button" :disabled="aiBusy" @click="callAi('explain')">
+            问 AI 为什么错
+          </button>
+          <button class="primary small" type="button" :disabled="aiBusy" @click="callAi('analyze')">
+            分析正确结果
+          </button>
+          <button
+            v-for="level in 3"
+            :key="level"
+            class="link"
+            type="button"
+            :disabled="aiBusy || !canHint(level)"
+            @click="callAi('hint', { level })"
+          >
+            思路 L{{ level }}{{ aiStatus.hintLevelsUnlocked >= level ? '（已解锁）' : '' }}
+          </button>
+          <span class="meta">{{ aiRemainingText }}</span>
+        </div>
+        <p v-if="aiStatus.passed" class="meta">已通过：思路提示已关闭，仍可问「为什么」或看正确结果分析。</p>
+        <p v-if="aiError" class="error">{{ aiError }}</p>
+
+        <div v-if="aiAnswer">
+          <AiAnswer :answer="aiAnswer" />
+          <button class="link" type="button" :disabled="aiBusy" @click="refreshAiAnswer">强制刷新一次</button>
+        </div>
+      </template>
     </div>
   </template>
 </template>

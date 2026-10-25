@@ -467,3 +467,168 @@ td.right .link {
 img.img-broken {
   outline: 1px dashed var(--line);
 }
+
+/* ===== M3：AI 面板 / 知识问答 ===== */
+.ai-panel h2 {
+  margin-bottom: 8px;
+}
+
+.ai-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 10px 0 14px;
+}
+
+/* 不可复制：AI 区域禁止选中，右键与复制由组件事件拦住 */
+.ai-answer {
+  border: 1px solid #d9e3f0;
+  background: #fbfdff;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.ai-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.ai-card h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--brand-dark);
+}
+
+.ai-card p {
+  margin: 4px 0;
+  line-height: 1.7;
+}
+
+.ai-card ul {
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+
+.ai-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ai-disclaimer {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 10px 0 0;
+}
+
+.ai-canvas canvas {
+  display: block;
+  max-width: 100%;
+}
+
+.chat-layout {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.chat-side {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.chat-item {
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.chat-item:hover {
+  border-color: var(--line);
+}
+
+.chat-item.active {
+  background: #eef4fb;
+  border-color: #cfe0f2;
+}
+
+.chat-item .small {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.chat-history {
+  max-height: 420px;
+  overflow: auto;
+  margin-bottom: 12px;
+}
+
+.chat-bubble {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.chat-bubble.user {
+  background: #f4f8fd;
+}
+
+.chat-bubble p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+
+.ask-box {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.ask-box textarea {
+  margin-bottom: 8px;
+}
+
+.cite {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: #fff;
+}
+
+.cite summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.cite-body {
+  white-space: pre-wrap;
+  margin-top: 8px;
+  max-height: 240px;
+  overflow: auto;
+}
