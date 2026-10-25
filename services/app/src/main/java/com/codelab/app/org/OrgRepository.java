@@ -240,13 +240,6 @@ public class OrgRepository {
                 .list();
     }
 
-    public long countStudentsInClass(UUID classId) {
-        return jdbc.sql("SELECT count(*) FROM enrollments WHERE class_id = :classId")
-                .param("classId", classId)
-                .query(Long.class)
-                .single();
-    }
-
     // ---------------- 删除 / 退班 ----------------
 
     public long countTeachingClassesByClass(UUID classId) {

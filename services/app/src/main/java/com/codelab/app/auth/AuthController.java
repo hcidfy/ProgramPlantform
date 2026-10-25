@@ -2,7 +2,6 @@ package com.codelab.app.auth;
 
 import com.codelab.app.config.AppProperties;
 import com.codelab.app.security.CurrentUser;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -81,8 +80,7 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
-            @CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken,
-            HttpServletRequest request) {
+            @CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         CurrentUser current = authentication != null && authentication.getPrincipal() instanceof CurrentUser cu
                 ? cu : null;
