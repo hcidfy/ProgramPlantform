@@ -602,10 +602,98 @@ CREATE INDEX submissions_user_problem_idx ON submissions (user_id, problem_id, c
 
 ---
 
-## 14. 版本记录
+## 14. M2 接口契约（v0.2.2 追加）
+
+> M2 = 题库 + 作业 + 学生做题 + 提交判题 + 结果页（PRD §11）。本节只写正文没写细的部分；冲突以正文为准。
+
+### 14.1 三处**本版确定**的落地决策（需你追认，不追认我按此继续）
+
+| # | 决策 | 理由（可行性） |
+|-|-|-|
+| **D1** | 判题异步**先走 PG 队列表 `judge_queue`**（`FOR UPDATE SKIP LOCKED`），RocketMQ 版等有 broker 可测时再换 | 即 §7.6 预留的降级开关。本机无 Docker → MQ 无法验证，交付未验证的 MQ 代码是更大的风险。已按 §7.6 抽 `JudgeTaskQueue` 接口，换实现业务代码零改动；`judge.task`/`notify` 两个 topic 的定义与 compose 编排保留 |
+| **D2** | 文件存储走 `FileStorage` 接口：`minio`（生产，手写 S3 SigV4，不引 SDK）+ `local`（**仅开发**，写本地目录） | MinIO 官方已停止分发免费单机二进制、Docker Hub 在本机不可达 → 无法本地起 MinIO 验证；用同一接口的 local 实现把上传/展示链路跑通，MinIO 实现交付但**首部署必须实测一次**（手册给了命令） |
+| **D3** | 判题在 **`app` 容器内**执行，运行镜像从 JRE 换 **JDK 21 + python3**；生产以 `runuser -u judge` 降权运行（`APP_JUDGE_RUN_AS_USER=judge`），开发机走直跑分支 | §7.4 要求 javac/python3 与低权限用户；同机同容器最省内存，符合 2C4G 预算 |
+
+### 14.2 题库（教师，scope = 自己任课教学班的课程）
+
+| 方法 | 路径 | 说明 |
+|-|-|-|
+| GET | `/api/teacher/problems?courseId=&status=&q=` | 仅限自己任课课程；`courseId` 越权 → 404 |
+| POST | `/api/teacher/problems` | `{courseId,title,statementMd,language,difficulty,timeLimitMs,memLimitKb,initialCode}` → draft |
+| GET | `/api/teacher/problems/{id}` | 含用例（教师可见隐藏用例） |
+| PUT | `/api/teacher/problems/{id}` | **仅 draft 可改**；已发布 → 409 `PROBLEM_LOCKED` |
+| POST | `/api/teacher/problems/{id}/publish` | draft → published；无用例 → 422 |
+| POST | `/api/teacher/problems/{id}/new-version` | 已发布题改题面的唯一路径：复制为 draft，`version+1`，`previous_version_id` 指向旧题 |
+| DELETE | `/api/teacher/problems/{id}` | 仅 draft |
+| GET/PUT | `/api/teacher/problems/{id}/test-cases` | `PUT` **整体替换**（按数组顺序写 seq 1..n，事务内先删后插） |
+
+用例字段：`{seq,input,expected,isHidden,score}`；用例数 ≤ 20（§7.4）。
+
+### 14.3 文件（题目图片）
+
+| 方法 | 路径 | 说明 |
+|-|-|-|
+| POST | `/api/teacher/files` | `multipart/form-data`：`file` + `problemId`；白名单 MIME `image/png|jpeg|gif|webp`；单文件 ≤ 5 MB（超限 413） |
+| GET | `/api/files/{id}` | 图片回显：文件所有者（教师）或"该题对学生可见"时可读，否则 404。题面里写 `![](/api/files/{id})` |
+
+### 14.4 作业（教师）
+
+| 方法 | 路径 | 说明 |
+|-|-|-|
+| POST | `/api/teacher/assignments` | `{teachingClassId,title,description,deadline,problems:[{problemId,score}]}` → draft；非本人教学班 → 404 |
+| PUT | `/api/teacher/assignments/{id}` | draft 可改 |
+| POST | `/api/teacher/assignments/{id}/publish` | draft → published（一键推送，学生立即可见） |
+| GET | `/api/teacher/assignments?teachingClassId=` | 列表 + 进度摘要 |
+| GET | `/api/teacher/assignments/{id}` | 详情：题目列表 + `{expectedCount,submittedCount,passedCount,passRate,throughoutRate}` |
+| GET | `/api/teacher/assignments/{id}/submissions?problemId=` | 本教学班学生的提交（**含代码**，写审计 `teacher.view_code`） |
+| POST | `/api/teacher/submissions/{id}/rejudge` | 复制为新提交（`rejudge_of`）重新排队，旧记录保留 |
+
+进度口径（FR-TCH-03）：`expectedCount` = 该教学班学生数；`submittedCount` = 交过至少一次的人数；`passedCount` = 该作业全部题目都 AC 的人数；`passRate` = passed/expected；`throughoutRate` = 通过提交数 ÷ 总提交数（PRD §3.1 只做这一个百分比）。
+
+### 14.5 学生（做题 / 提交 / 我的）
+
+| 方法 | 路径 | 说明 |
+|-|-|-|
+| GET | `/api/student/assignments` | 本班已发布作业 + 每题我的状态（`not_started/submitted/passed`） |
+| GET | `/api/student/assignments/{id}` | 作业详情 + 题目列表（非本班 → 404） |
+| GET | `/api/student/problems/{id}` | 题面 + 初始代码 + 限制；**隐藏用例内容永不下发**；非本班可见 → 404 |
+| POST | `/api/student/submissions` | `{problemId,assignmentId?,language,sourceCode}`；源码 > 64 KB → 413；同题 10 s 内重复 → 返回既有提交（幂等） |
+| GET | `/api/student/submissions/{id}` | 状态/结果；`queued` 时给 `queuePosition`；含代码（仅本人） |
+| GET | `/api/student/submissions?problemId=&assignmentId=&page=&size=` | 我的提交历史 |
+
+提交状态机：`queued → judging → done`（结果 `accepted/wrong_answer/compile_error/runtime_error/timeout`）或 `judge_error`。
+结果展示口径（FR-JDG-02）：`passedCases/totalCases/score`、首个失败用例的 `input/expected/actual`（各截断 500 字符）、`compileOutput`（截断 4 KB）；**隐藏用例只显示"第 N 组未通过"**。
+
+### 14.6 判题执行（对齐 §7.4）
+
+| 项 | 值 |
+|-|-|
+| 工作目录 | `APP_JUDGE_DIR`（生产 `/data/judge`）+ `/{submissionId}/`；结束后保留 24 h，由后台清理任务删除 |
+| 编译 | `javac Main.java`，超时 10 s；Python 不编译 |
+| 运行 | 外层 `bash -c 'ulimit -t <秒> -u 64 -f 2048 [-v <KB>]; exec <cmd>'`；超时 = 题目时限 × 2 后杀进程树 |
+| Java | `java -Xmx{mem_limit_kb/1024}M -cp . Main`（**不加 `-v`**，JVM 预留虚拟内存会起不来） |
+| Python | `python3 main.py`，**额外加 `-v`** |
+| 截断 | 单用例输出 64 KB、编译错误 4 KB、实际输出回显 500 字符 |
+| 并发 | 2（`APP_JUDGE_CONCURRENCY`）；队列积压 > 20 → 提交返回 429 `JUDGE_BUSY` |
+| 崩溃 | 判题进程异常/超时未收敛 → `judge_error`，不影响其他提交 |
+
+### 14.7 表结构增补（相对 §9）
+
+| 表 | 增补/说明 |
+|-|-|
+| `problems` | `initial_code`、`previous_version_id`（新版本链）、`published_at` |
+| `submissions` | `result`（终态）、`compile_output`、`rejudge_of` |
+| `judge_case_results` | 增加 `is_hidden`（隐藏用例只下发"第 N 组"）、`exit_code` |
+| `judge_queue` | 新增：`(submission_id unique, status, attempts, enqueued_at, started_at, finished_at)` —— D1 的 PG 队列 |
+| `files` | 新增 `problem_id`、`original_name`、`size_bytes`、`purpose`；对象键 `problem/{problemId}/{uuid}.{ext}` |
+
+---
+
+## 15. 版本记录
 
 | 版本 | 日期 | 变更 |
 |-|-|-|
 | v0.1 | 2026-10-25 | 完备目标形态：六域职能、40+ FR、10 微服务、沙箱、向量检索、全链路可观测、CI/CD |
 | v0.2 | 2026-10-25 | 按"2C4G 单机 + 单人开发"重构：删 TA/沙箱/向量/可观测/CI/测试/社区；两服务；三角色 + token 配额；两服务定位（答题解疑 / AI 知识问答）；AI 时间闸门 + 不可复制；G1 改为"帮助用户借助 AI 完成题目"；规模降至 ≤150 注册 / ≤500 提交/日，并给出 2C4G 内存账本 |
 | v0.2.1 | 2026-10-26 | **M1 落地契约**（新增 §13）：认证/管理端/教师端/学生端接口与状态码约定、JWT 与 refresh cookie 细则、失败锁定、`users`+`auth_sessions` 字段增补、`schema_migrations` 迁移器、新增待决策 Q7~Q9（教师不自助注册 / 管理员由 env 幂等创建 / 锁定按账号） |
+| v0.2.2 | 2026-10-26 | **M2 落地契约**（新增 §14）：题库/用例/图片/作业/提交/判题接口与口径；三处落地决策 D1（判题先走 PG 队列，MQ 后置）/ D2（FileStorage 双实现，local 仅开发）/ D3（运行镜像换 JDK+python3、判题降权用户）；`judge_queue`/`files` 新表与若干字段增补 |

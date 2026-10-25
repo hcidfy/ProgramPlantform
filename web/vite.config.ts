@@ -21,6 +21,16 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Monaco 单独成块：改业务代码不会让编辑器缓存失效
+        manualChunks: {
+          monaco: ['monaco-editor'],
+          vue: ['vue', 'vue-router']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 5000
   }
 })

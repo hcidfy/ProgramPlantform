@@ -240,6 +240,62 @@ public class OrgRepository {
                 .list();
     }
 
+    // ---------------- 教师/课程范围（M2 题库权限用） ----------------
+
+    public List<UUID> listCourseIdsByTeacher(UUID teacherId) {
+        return jdbc.sql("SELECT DISTINCT course_id FROM teaching_classes WHERE teacher_id = :teacherId")
+                .param("teacherId", teacherId)
+                .query(UUID.class)
+                .list();
+    }
+
+    public java.util.List<UUID> listTeachingClassIdsByTeacher(UUID teacherId) {
+        return jdbc.sql("SELECT id FROM teaching_classes WHERE teacher_id = :teacherId ORDER BY created_at")
+                .param("teacherId", teacherId)
+                .query(UUID.class)
+                .list();
+    }
+
+    public boolean teacherTeachesCourse(UUID teacherId, UUID courseId) {
+        return jdbc.sql("SELECT 1 FROM teaching_classes WHERE teacher_id = :teacherId AND course_id = :courseId")
+                .param("teacherId", teacherId)
+                .param("courseId", courseId)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    public Optional<UUID> findCourseIdByTeachingClass(UUID teachingClassId) {
+        return jdbc.sql("SELECT course_id FROM teaching_classes WHERE id = :id")
+                .param("id", teachingClassId)
+                .query(UUID.class)
+                .optional();
+    }
+
+    public boolean teacherOwnsTeachingClass(UUID teacherId, UUID teachingClassId) {
+        return jdbc.sql("SELECT 1 FROM teaching_classes WHERE id = :tcId AND teacher_id = :teacherId")
+                .param("tcId", teachingClassId)
+                .param("teacherId", teacherId)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    /** 学生是否属于该教学班对应的行政班。 */
+    public boolean studentInTeachingClass(UUID studentId, UUID teachingClassId) {
+        return jdbc.sql("""
+                        SELECT 1
+                          FROM teaching_classes tc
+                          JOIN enrollments e ON e.class_id = tc.class_id
+                         WHERE tc.id = :tcId AND e.student_id = :studentId
+                        """)
+                .param("tcId", teachingClassId)
+                .param("studentId", studentId)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
     // ---------------- 删除 / 退班 ----------------
 
     public long countTeachingClassesByClass(UUID classId) {

@@ -21,4 +21,13 @@ public final class AuditActions {
     public static final String ADMIN_DELETE_TEACHING_CLASS = "admin.teaching_class.delete";
     public static final String ADMIN_ENROLL = "admin.enrollment.upsert";
     public static final String ADMIN_UNENROLL = "admin.enrollment.delete";
+
+    public static final String PROBLEM_CREATE = "teacher.problem.create";
+    public static final String PROBLEM_PUBLISH = "teacher.problem.publish";
+    public static final String PROBLEM_NEW_VERSION = "teacher.problem.new_version";
+    public static final String ASSIGNMENT_CREATE = "teacher.assignment.create";
+    public static final String ASSIGNMENT_PUBLISH = "teacher.assignment.publish";
+    public static final String STUDENT_SUBMIT = "student.submission.create";
+    public static final String TEACHER_VIEW_CODE = "teacher.view_code";
+    public static final String TEACHER_REJUDGE = "teacher.rejudge";
 }

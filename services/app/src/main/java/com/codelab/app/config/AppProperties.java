@@ -6,7 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** 应用自有配置（前缀 app.*），见 application.yml。 */
 @ConfigurationProperties(prefix = "app")
-public record AppProperties(Jwt jwt, Admin admin, Migration migration, Security security, Cors cors) {
+public record AppProperties(Jwt jwt, Admin admin, Migration migration, Security security, Cors cors,
+        Storage storage, Judge judge, Assignment assignment) {
 
     public record Jwt(String secret, String issuer, Duration accessTtl, Duration refreshTtl) {
     }
@@ -21,5 +22,20 @@ public record AppProperties(Jwt jwt, Admin admin, Migration migration, Security 
     }
 
     public record Cors(List<String> allowedOrigins) {
+    }
+
+    /** 文件存储：minio（生产）/ local（仅开发，PRD §14.1 D2）。 */
+    public record Storage(String type, String localDir, Minio minio) {
+        public record Minio(String endpoint, String accessKey, String secretKey, String bucket) {
+        }
+    }
+
+    /** 判题（PRD §14.6）。pythonCmd 为空时按平台自动选择。 */
+    public record Judge(boolean enabled, String dir, int concurrency, int maxQueue, String runAsUser,
+            String pythonCmd, int retentionHours, int maxCases) {
+    }
+
+    /** 作业行为开关（FR-TCH-02）。 */
+    public record Assignment(boolean allowLate) {
     }
 }

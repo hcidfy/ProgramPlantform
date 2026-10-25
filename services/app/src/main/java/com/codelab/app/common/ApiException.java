@@ -52,4 +52,12 @@ public class ApiException extends RuntimeException {
     public static ApiException locked(String message) {
         return new ApiException(HttpStatus.LOCKED, "ACCOUNT_LOCKED", message);
     }
+
+    public static ApiException payloadTooLarge(String message) {
+        return new ApiException(HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE", message);
+    }
+
+    public static ApiException tooManyRequests(String code, String message) {
+        return new ApiException(HttpStatus.TOO_MANY_REQUESTS, code, message);
+    }
 }

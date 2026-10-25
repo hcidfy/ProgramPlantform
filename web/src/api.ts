@@ -22,6 +22,10 @@ export function setAccessToken(token: string | null): void {
   accessToken = token
 }
 
+export function getAccessToken(): string | null {
+  return accessToken
+}
+
 async function doRefresh(): Promise<boolean> {
   if (!refreshing) {
     refreshing = (async () => {
@@ -48,7 +52,8 @@ async function doRefresh(): Promise<boolean> {
 
 export async function request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
   const headers = new Headers(init.headers)
-  if (init.body && !headers.has('Content-Type')) {
+  // 只有字符串 body（JSON）才补 Content-Type；FormData 必须让浏览器自己带 boundary
+  if (typeof init.body === 'string' && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
   if (accessToken) {

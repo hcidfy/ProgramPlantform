@@ -11,7 +11,7 @@
 | 里程碑 | 状态 |
 |-|-|
 | **M1** 仓库骨架 / 中间件编排 / 数据库迁移 / 账号 / 组织模型 / 前端最小页 / 部署脚本 | ✅ 已交付（验收见 `scripts/m1-acceptance.sh`） |
-| M2 题库 + 作业 + Monaco 做题页 + 判题 | 未开始 |
+| **M2** 题库 + 用例 + 图片 + 作业 + Monaco 做题页 + 提交判题 + 结果页 | ✅ 已交付（教师布置 2 题 → 学生一过一错 → 结果页信息完整，51 项自动断言全绿） |
 | M3 `ai` 服务 4 条链 + 时间闸门 + 配额 | 未开始 |
 | M4 统计 / 管理端配额与用量 / 备份 | 未开始 |
 
@@ -22,7 +22,7 @@ docs/                      PRD、交接提示词、运维手册
 deploy/
   docker-compose.dev.yml   仅中间件（本机开发）
   docker-compose.prod.yml  完整栈（服务器）
-  db/                      迁移脚本（按文件名升序执行，可重复执行）
+  db/                      迁移脚本（V1 身份/组织、V2 题库/作业/判题/文件；按文件名升序执行）
   nginx/                   前端静态站 + /api 反代
   rocketmq/                broker 配置
 services/
@@ -71,17 +71,31 @@ cp .env.example .env && vi .env     # 密钥全部换掉
 
 详细步骤、常见错误、备份恢复见 `docs/ops/部署手册.md`。
 
-## M1 已实现的接口
+## 接口清单
 
 | 分类 | 接口 |
 |-|-|
 | 认证 | `POST /api/auth/register` `/login` `/refresh` `/logout`、`GET /api/auth/me` |
 | 管理端 | `/api/admin/users`（含 CSV 导入）、`/school-classes`、`/courses`、`/teaching-classes`、`/enrollments` |
-| 教师端 | `GET /api/teacher/teaching-classes`、`GET /api/teacher/teaching-classes/{id}` |
-| 学生端 | `GET /api/student/courses`、`GET /api/student/courses/{id}` |
+| 教师端（组织） | `GET /api/teacher/teaching-classes`、`GET /api/teacher/teaching-classes/{id}` |
+| 学生端（组织） | `GET /api/student/courses`、`GET /api/student/courses/{id}` |
+| 教师端（题库，M2） | `/api/teacher/problems`（增删改查/发布/另存新版本/用例整体替换）、`POST /api/teacher/files` |
+| 教师端（作业，M2） | `/api/teacher/assignments`（建/改/发布/进度/学生提交）、`POST /api/teacher/submissions/{id}/rejudge` |
+| 学生端（做题，M2） | `/api/student/assignments`、`/api/student/problems/{id}`、`POST /api/student/submissions`、`/api/student/submissions/{id}` |
+| 文件 | `GET /api/files/{id}`（题目图片，需登录且有权看该题） |
 | 健康 | `GET /healthz` |
 
 契约细则（状态码、JWT、refresh cookie、失败锁定、分页）见 PRD **§13**。
+
+## 关键取舍（M2 落地时确定，PRD v0.2.2 §14.1）
+
+| # | 决策 | 原因 |
+|-|-|-|
+| D1 | 判题异步先走 PG 队列表 `judge_queue`，RocketMQ 版后置（保留 `JudgeTaskQueue` 接口） | 即 PRD §7.6 预留的降级开关；交付无法验证的 MQ 代码风险更大 |
+| D2 | 文件存储抽象 `FileStorage`：`minio`（生产，手写 S3 SigV4）/ `local`（仅开发） | 本机无 Docker/MinIO，用 local 把上传/回显链路跑通 |
+| D3 | 判题在 app 容器内执行；运行镜像 JDK 21 + python3；生产用 `runuser -u judge` 降权 | PRD §7.4 要求 javac/python3 与低权限用户 |
+
+操作流程见 **`docs/操作手册.md`**（管理员怎么建班建课导名单、教师怎么建题布置作业看进度、学生怎么做题看结果）。
 
 ## 硬约束（来自 PRD v0.2，违反即回退）
 
@@ -101,11 +115,14 @@ cp .env.example .env && vi .env     # 密钥全部换掉
 | `bcprov-jdk18on` | `users.password_hash` 要 Argon2id，JDK 无 Argon2 实现 | 自己实现密码学哈希是明确的安全反模式 |
 | 前端 `vue` / `vue-router` | PRD 指定 Vue 3 单页 | — |
 | 前端 `vite` / `@vitejs/plugin-vue` / `typescript` | 构建期工具，PRD 指定 Vite + TS | — |
+| 前端 `monaco-editor` | PRD §7.2 指定 Monaco 作为在线编辑器 | 做不到"手写一个带 Java/Python 高亮的编辑器" |
+| 前端 `marked` | 题面是 Markdown（FR-PRB-01） | Markdown 解析规范庞杂，自写会踩一堆边界 |
 | **没有** JWT 库 | — | 只需 HS256 签发/校验，手写 100 行（`JwtService`） |
 | **没有** Flyway | — | 迁移器只需"按文件名执行 + 记录版本"，手写 60 行（`MigrationRunner`） |
 | **没有** actuator | PRD 依赖白名单里没有它 | 一个 `/healthz` 查询足够给 compose healthcheck 用 |
 | **没有** Pinia | — | Vue `reactive` 一个对象就够存登录态 |
-| **没有** Monaco | — | M1 没有代码编辑器页面，M2 再加 |
+| **没有** MinIO Java SDK | — | 只需 S3 的 PUT/GET，手写 SigV4 签名（`S3SigV4`）比拖进 okhttp+kotlin-stdlib 更合算 |
+| **没有** Flyway | — | 迁移器 60 行（`MigrationRunner`） |
 
 ## 已确认的默认值（PRD §12 + §13.7）
 

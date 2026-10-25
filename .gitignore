@@ -28,3 +28,8 @@ desktop.ini
 # pnpm 本地内容寻址仓库（不要入库）
 .pnpm-store/
 
+
+# 判题工作目录与本地文件存储（运行时产物）
+judge-work/
+storage/
+

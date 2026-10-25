@@ -112,12 +112,28 @@ services:
       APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:?请在 .env 里设置 APP_ADMIN_PASSWORD}
       APP_DB_MIGRATION_DIR: /app/db
       LOG_DIR: /app/logs
+      # 文件存储：生产必须走 MinIO（PRD §14.1 D2）
+      APP_STORAGE_TYPE: minio
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?请在 .env 里设置 MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?请在 .env 里设置 MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-codelab}
+      # 判题（PRD §14.6）：容器内以 judge 用户跑学生代码
+      APP_JUDGE_ENABLED: "true"
+      APP_JUDGE_DIR: /data/judge
+      APP_JUDGE_RUN_AS_USER: judge
+      APP_JUDGE_CONCURRENCY: ${APP_JUDGE_CONCURRENCY:-2}
+      APP_JUDGE_MAX_QUEUE: ${APP_JUDGE_MAX_QUEUE:-20}
+      APP_ASSIGNMENT_ALLOW_LATE: ${APP_ASSIGNMENT_ALLOW_LATE:-false}
       JAVA_TOOL_OPTIONS: -Xmx640m -Xss512k
     volumes:
       - ./db:/app/db:ro
       - ./logs:/app/logs
+      - appjudge:/data/judge
     depends_on:
       postgres:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     mem_limit: 900m
     healthcheck:
@@ -144,3 +160,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  appjudge:
