@@ -113,6 +113,44 @@ public class OrgService {
         return org.listStudentsInClass(classId);
     }
 
+    /** 删班级：下面还有教学班或学生就不许删，避免留下孤儿数据。 */
+    public void deleteClass(UUID actorId, UUID classId) {
+        org.findClassById(classId).orElseThrow(() -> ApiException.notFound("班级不存在"));
+        long teachingClasses = org.countTeachingClassesByClass(classId);
+        long students = org.countEnrollmentsByClass(classId);
+        if (teachingClasses > 0 || students > 0) {
+            throw ApiException.conflict("CLASS_IN_USE",
+                    "该班级还有 " + teachingClasses + " 个教学班、" + students + " 名学生，先解除绑定再删");
+        }
+        org.deleteClass(classId);
+        audit.record(actorId, AuditActions.ADMIN_DELETE_CLASS, "school_class:" + classId, Map.of("classId", classId));
+    }
+
+    public void deleteCourse(UUID actorId, UUID courseId) {
+        org.findCourseById(courseId).orElseThrow(() -> ApiException.notFound("课程不存在"));
+        long teachingClasses = org.countTeachingClassesByCourse(courseId);
+        if (teachingClasses > 0) {
+            throw ApiException.conflict("COURSE_IN_USE", "该课程还有 " + teachingClasses + " 个教学班，先删教学班");
+        }
+        org.deleteCourse(courseId);
+        audit.record(actorId, AuditActions.ADMIN_DELETE_COURSE, "course:" + courseId, Map.of("courseId", courseId));
+    }
+
+    public void deleteTeachingClass(UUID actorId, UUID teachingClassId) {
+        org.findTeachingClassById(teachingClassId).orElseThrow(() -> ApiException.notFound("教学班不存在"));
+        org.deleteTeachingClass(teachingClassId);
+        audit.record(actorId, AuditActions.ADMIN_DELETE_TEACHING_CLASS, "teaching_class:" + teachingClassId,
+                Map.of("teachingClassId", teachingClassId));
+    }
+
+    /** 退班：学生回到"无班级"状态（再登录会看到 needClass 提示）。 */
+    public void unenroll(UUID actorId, UUID studentId) {
+        if (org.deleteEnrollmentByStudent(studentId) == 0) {
+            throw ApiException.notFound("该学生当前没有班级");
+        }
+        audit.record(actorId, AuditActions.ADMIN_UNENROLL, "enrollment:" + studentId, Map.of("studentId", studentId));
+    }
+
     // ---------------- 教师端 ----------------
 
     public List<OrgRepository.TeachingClassRow> teacherClasses(UUID teacherId) {

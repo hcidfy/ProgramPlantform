@@ -15,7 +15,9 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -138,6 +140,32 @@ public class AdminOrgController {
     @PostMapping("/enrollments")
     public ResponseEntity<Void> enroll(@Valid @RequestBody EnrollRequest req) {
         org.enroll(SecurityUtils.require().id(), req.studentId(), req.classId());
+        return ResponseEntity.noContent().build();
+    }
+
+    // ---------------- 删除 / 退班 ----------------
+
+    @DeleteMapping("/enrollments/{studentId}")
+    public ResponseEntity<Void> unenroll(@PathVariable UUID studentId) {
+        org.unenroll(SecurityUtils.require().id(), studentId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/school-classes/{id}")
+    public ResponseEntity<Void> deleteClass(@PathVariable UUID id) {
+        org.deleteClass(SecurityUtils.require().id(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/courses/{id}")
+    public ResponseEntity<Void> deleteCourse(@PathVariable UUID id) {
+        org.deleteCourse(SecurityUtils.require().id(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/teaching-classes/{id}")
+    public ResponseEntity<Void> deleteTeachingClass(@PathVariable UUID id) {
+        org.deleteTeachingClass(SecurityUtils.require().id(), id);
         return ResponseEntity.noContent().build();
     }
 }

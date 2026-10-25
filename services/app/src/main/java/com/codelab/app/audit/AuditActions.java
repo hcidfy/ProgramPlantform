@@ -14,7 +14,11 @@ public final class AuditActions {
     public static final String ADMIN_CREATE_USER = "admin.user.create";
     public static final String ADMIN_IMPORT_USERS = "admin.user.import";
     public static final String ADMIN_CREATE_CLASS = "admin.school_class.create";
+    public static final String ADMIN_DELETE_CLASS = "admin.school_class.delete";
     public static final String ADMIN_CREATE_COURSE = "admin.course.create";
+    public static final String ADMIN_DELETE_COURSE = "admin.course.delete";
     public static final String ADMIN_CREATE_TEACHING_CLASS = "admin.teaching_class.create";
+    public static final String ADMIN_DELETE_TEACHING_CLASS = "admin.teaching_class.delete";
     public static final String ADMIN_ENROLL = "admin.enrollment.upsert";
+    public static final String ADMIN_UNENROLL = "admin.enrollment.delete";
 }

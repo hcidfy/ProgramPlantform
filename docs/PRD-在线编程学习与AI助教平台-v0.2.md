@@ -554,6 +554,10 @@ CREATE INDEX submissions_user_problem_idx ON submissions (user_id, problem_id, c
 | GET/POST | `/api/admin/teaching-classes` | `{classId, courseId, teacherId, term}`；`(classId,courseId,term)` 重复 → 409 |
 | GET/POST | `/api/admin/enrollments` | `{studentId, classId}`；一人一班，改绑即更新 |
 | GET | `/api/admin/teaching-classes` | 全部教学班（含班级/课程/教师名） |
+| DELETE | `/api/admin/school-classes/{id}` | 下面还有教学班或学生 → 409 `CLASS_IN_USE` |
+| DELETE | `/api/admin/courses/{id}` | 下面还有教学班 → 409 `COURSE_IN_USE` |
+| DELETE | `/api/admin/teaching-classes/{id}` | 直接删；M2 引入作业后改为"有作业则 409 / 软删归档" |
+| DELETE | `/api/admin/enrollments/{studentId}` | 退班；该学生本来没有班级 → 404 |
 
 ### 13.3 教师端接口（FR-ACC-03）
 

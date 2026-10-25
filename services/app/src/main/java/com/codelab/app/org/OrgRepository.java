@@ -246,4 +246,47 @@ public class OrgRepository {
                 .query(Long.class)
                 .single();
     }
+
+    // ---------------- 删除 / 退班 ----------------
+
+    public long countTeachingClassesByClass(UUID classId) {
+        return jdbc.sql("SELECT count(*) FROM teaching_classes WHERE class_id = :classId")
+                .param("classId", classId)
+                .query(Long.class)
+                .single();
+    }
+
+    public long countEnrollmentsByClass(UUID classId) {
+        return jdbc.sql("SELECT count(*) FROM enrollments WHERE class_id = :classId")
+                .param("classId", classId)
+                .query(Long.class)
+                .single();
+    }
+
+    public long countTeachingClassesByCourse(UUID courseId) {
+        return jdbc.sql("SELECT count(*) FROM teaching_classes WHERE course_id = :courseId")
+                .param("courseId", courseId)
+                .query(Long.class)
+                .single();
+    }
+
+    /** 返回受影响行数（0 = 已不存在）。 */
+    public int deleteClass(UUID id) {
+        return jdbc.sql("DELETE FROM school_classes WHERE id = :id").param("id", id).update();
+    }
+
+    public int deleteCourse(UUID id) {
+        return jdbc.sql("DELETE FROM courses WHERE id = :id").param("id", id).update();
+    }
+
+    public int deleteTeachingClass(UUID id) {
+        return jdbc.sql("DELETE FROM teaching_classes WHERE id = :id").param("id", id).update();
+    }
+
+    /** 退班（一个学生只有一个班，按学生删）。 */
+    public int deleteEnrollmentByStudent(UUID studentId) {
+        return jdbc.sql("DELETE FROM enrollments WHERE student_id = :studentId")
+                .param("studentId", studentId)
+                .update();
+    }
 }
