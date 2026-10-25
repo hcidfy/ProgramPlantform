@@ -100,7 +100,7 @@ public class JudgeRunner {
                 String actual = readCapped(out, MAX_OUTPUT_BYTES);
 
                 String status;
-                if (exec.timedOut()) {
+                if (exec.timedOut() || isTimeoutExit(exec.exitCode())) {
                     status = "tle";
                     anyTimeout = true;
                     actual = "";
@@ -193,7 +193,8 @@ public class JudgeRunner {
                     ? List.of(javaTool("java"), "-Xmx" + memMb + "M", "-cp", ".", "Main")
                     : List.of(python, "main.py");
         }
-        int seconds = (int) Math.max(1, (Math.min(problem.timeLimitMs() * 2L, 20_000L) + 999) / 1000);
+        // 外层 waitFor 是主超时（时序×2）；ulimit -t 留 2 秒余量做兜底，避免内核 SIGXCPU 抢先导致误判成 RE
+        int seconds = (int) Math.max(1, (Math.min(problem.timeLimitMs() * 2L, 20_000L) + 999) / 1000) + 2;
         String inner = java
                 ? "exec " + javaTool("java") + " -Xmx" + memMb + "M -cp . Main"
                 // Python 才加 -v（虚拟内存上限）；Java 加 -v 会因 JVM 预留虚拟内存直接起不来
@@ -229,6 +230,11 @@ public class JudgeRunner {
             return configured.trim();
         }
         return windows ? "python" : "python3";
+    }
+
+    /** 152=SIGXCPU(128+24)、137=SIGKILL(128+9)、124=timeout(1)：都按超时算，别误报成运行错误。 */
+    private static boolean isTimeoutExit(int exitCode) {
+        return exitCode == 152 || exitCode == 137 || exitCode == 124;
     }
 
     private record ExecResult(int exitCode, boolean timedOut, int elapsedMs) {

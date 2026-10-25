@@ -19,9 +19,11 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=build /build/target/app.jar /app/app.jar
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod 0755 /app/docker-entrypoint.sh
 ENV TZ=Asia/Shanghai \
     LOG_DIR=/app/logs \
     APP_JUDGE_DIR=/data/judge
 EXPOSE 8080
-# 注意：进程仍以 root 起，判题子进程用 runuser 降到 judge 用户执行（APP_JUDGE_RUN_AS_USER=judge）
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+# 进程以 root 起（要能 runuser 降权），判题子进程用 runuser 切到 judge 用户
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

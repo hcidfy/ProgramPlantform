@@ -26,6 +26,23 @@ if env_get POSTGRES_PASSWORD | grep -q '^change_me'; then die "POSTGRES_PASSWORD
 if env_get MINIO_ROOT_PASSWORD | grep -q '^change_me'; then die "MINIO_ROOT_PASSWORD 还是示例值，必须替换"; fi
 if env_get APP_ADMIN_PASSWORD | grep -q '^Admin@12345$'; then log "警告：APP_ADMIN_PASSWORD 是默认值，登录后请尽快修改"; fi
 
+# ---- AI provider 专项检查（M3）：假 AI 绝不能悄悄上线 ----
+AI_PROVIDER_VALUE="$(env_get AI_PROVIDER || true)"
+AI_TOKEN_VALUE="$(env_get AI_INTERNAL_TOKEN || true)"
+if [ -z "${AI_TOKEN_VALUE}" ]; then die "AI_INTERNAL_TOKEN 未设置（app↔ai 的内部令牌）"; fi
+if [ "${#AI_TOKEN_VALUE}" -lt 16 ]; then die "AI_INTERNAL_TOKEN 太短，至少 16 字符"; fi
+case "${AI_TOKEN_VALUE}" in *change_me*|*dev_internal*) die "AI_INTERNAL_TOKEN 还是示例值，必须替换" ;; esac
+
+if [ "${AI_PROVIDER_VALUE}" != "openai" ]; then
+  if [ "${ALLOW_STUB_AI:-0}" = "1" ]; then
+    log "警告：AI_PROVIDER=${AI_PROVIDER_VALUE:-未设置}（假 AI / stub），仅演示用；已用 ALLOW_STUB_AI=1 显式放行"
+  else
+    die "AI_PROVIDER=${AI_PROVIDER_VALUE:-未设置}：生产必须是 openai。确需演示请显式执行 ALLOW_STUB_AI=1 ./scripts/deploy.sh"
+  fi
+else
+  if [ -z "$(env_get DASHSCOPE_API_KEY || true)" ]; then die "AI_PROVIDER=openai 但 DASHSCOPE_API_KEY 为空"; fi
+fi
+
 log "构建镜像（app + web）"
 "${COMPOSE[@]}" build
 

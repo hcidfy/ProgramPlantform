@@ -30,13 +30,25 @@ public class AiQuotaService {
     private final OrgRepository org;
     private final ProblemRepository problems;
     private final AuditService audit;
+    private final com.codelab.app.config.AppProperties props;
 
     public AiQuotaService(AiQuotaRepository quotas, OrgRepository org, ProblemRepository problems,
-            AuditService audit) {
+            AuditService audit, com.codelab.app.config.AppProperties props) {
         this.quotas = quotas;
         this.org = org;
         this.problems = problems;
         this.audit = audit;
+        this.props = props;
+    }
+
+    private int defaultDailyTokens() {
+        var ai = props.ai();
+        return ai == null || ai.defaultDailyTokens() <= 0 ? DEFAULT_DAILY_TOKENS : ai.defaultDailyTokens();
+    }
+
+    private int defaultPerProblemCalls() {
+        var ai = props.ai();
+        return ai == null || ai.defaultPerProblemCalls() <= 0 ? DEFAULT_PER_PROBLEM_CALLS : ai.defaultPerProblemCalls();
     }
 
     public Limits limits(UUID studentId, UUID problemId) {
@@ -57,7 +69,7 @@ public class AiQuotaService {
         }
         return quotas.find("global", null)
                 .map(row -> new Limits(row.dailyTokens(), row.perProblemCalls()))
-                .orElse(new Limits(DEFAULT_DAILY_TOKENS, DEFAULT_PER_PROBLEM_CALLS));
+                .orElse(new Limits(defaultDailyTokens(), defaultPerProblemCalls()));
     }
 
     public Snapshot snapshot(UUID studentId, UUID problemId) {

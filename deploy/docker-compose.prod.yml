@@ -78,7 +78,9 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    # MinIO 社区镜像已从 Docker Hub 下架，官方当前分发在 quay.io。
+    # 若 quay.io 匿名拉取受限，可用 cgr.dev/chainguard/minio 或任意 S3 兼容服务（改 MINIO_IMAGE 即可）
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:latest}
     container_name: codelab-minio
     command: server /data --console-address ":9001"
     environment:
@@ -142,7 +144,7 @@ services:
       minio:
         condition: service_healthy
       ai:
-        condition: service_started
+        condition: service_healthy
     mem_limit: 900m
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz || exit 1"]

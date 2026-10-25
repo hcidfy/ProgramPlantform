@@ -75,6 +75,9 @@ app:
     max-tokens: ${APP_AI_MAX_TOKENS:1000}
     # 仅用于日志提示：ai 侧真实 provider 由 AI_PROVIDER 决定
     stub: ${APP_AI_STUB:true}
+    # 配额默认值（没有 ai_quotas 覆盖时生效）；单题次数按 PRD §5.3"合计口径"
+    default-daily-tokens: ${APP_AI_DEFAULT_DAILY_TOKENS:30000}
+    default-per-problem-calls: ${APP_AI_DEFAULT_PER_PROBLEM_CALLS:10}
 
 logging:
   level:

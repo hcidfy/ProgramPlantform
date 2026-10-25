@@ -41,6 +41,7 @@ public record AppProperties(Jwt jwt, Admin admin, Migration migration, Security 
 
     /** AI 编排服务（PRD §15.1 D4~D6）。 */
     public record Ai(boolean enabled, String baseUrl, String internalToken, int cacheTtlMinutes,
-            int timeoutSeconds, int maxTokens, boolean stub) {
+            int timeoutSeconds, int maxTokens, boolean stub, int defaultDailyTokens,
+            int defaultPerProblemCalls) {
     }
 }
