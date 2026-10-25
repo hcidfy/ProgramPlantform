@@ -1,0 +1,146 @@
+# M1-2 生产编排：完整栈（中间件 + app + web），面向 2C4G 单机
+# 用法：./scripts/deploy.sh   （内部即 docker compose -f deploy/docker-compose.prod.yml --env-file .env up -d --build）
+# ai 服务（Python）在 M3 加入本文件，内存预算已按 PRD §7.3 预留
+name: codelab
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: codelab-pg
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-codelab}
+      POSTGRES_USER: ${POSTGRES_USER:-codelab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 里设置 POSTGRES_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - max_connections=60
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/backups:/backups
+    mem_limit: 450m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-codelab} -d ${POSTGRES_DB:-codelab}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: codelab-redis
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 64mb
+      - --maxmemory-policy
+      - allkeys-lru
+    mem_limit: 100m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.3.1
+    container_name: codelab-mq-namesrv
+    command: sh mqnamesrv
+    environment:
+      JAVA_OPT_EXT: "-Xms128m -Xmx128m -Xmn64m"
+      TZ: ${TZ:-Asia/Shanghai}
+    mem_limit: 200m
+    restart: unless-stopped
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.1
+    container_name: codelab-mq-broker
+    command: sh mqbroker -c /home/rocketmq/conf/broker.conf
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+      JAVA_OPT_EXT: "-Xms256m -Xmx512m -Xmn256m"
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./rocketmq/broker.conf:/home/rocketmq/conf/broker.conf:ro
+    depends_on:
+      - rocketmq-namesrv
+    mem_limit: 500m
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: codelab-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?请在 .env 里设置 MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?请在 .env 里设置 MINIO_ROOT_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+    mem_limit: 200m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ../services/app
+    container_name: codelab-app
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-codelab}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-codelab}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 里设置 POSTGRES_PASSWORD}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?请在 .env 里设置 APP_JWT_SECRET}
+      APP_ADMIN_EMAIL: ${APP_ADMIN_EMAIL:-admin@example.edu}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:?请在 .env 里设置 APP_ADMIN_PASSWORD}
+      APP_DB_MIGRATION_DIR: /app/db
+      LOG_DIR: /app/logs
+      JAVA_TOOL_OPTIONS: -Xmx640m -Xss512k
+    volumes:
+      - ./db:/app/db:ro
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 900m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    container_name: codelab-web
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      app:
+        condition: service_started
+    mem_limit: 200m
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:

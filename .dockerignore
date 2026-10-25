@@ -1,0 +1,10 @@
+.git
+.tools
+.m2repo
+docs
+**/node_modules
+**/dist
+**/target
+logs
+.env
+*.log

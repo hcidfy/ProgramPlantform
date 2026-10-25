@@ -1,0 +1,112 @@
+# M1-2 开发编排：只起中间件，app / web 走本机进程（mvn spring-boot:run、pnpm dev）
+# 用法：docker compose -f deploy/docker-compose.dev.yml --env-file .env up -d
+# mem_limit 全部按 PRD §7.3 内存账本设置，禁止超配
+name: codelab-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: codelab-pg
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-codelab}
+      POSTGRES_USER: ${POSTGRES_USER:-codelab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 里设置 POSTGRES_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - max_connections=60
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    mem_limit: 450m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-codelab} -d ${POSTGRES_DB:-codelab}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Redis 不持久化：不配 RDB/AOF，丢了只影响会话与计数（PRD §7.5）
+  redis:
+    image: redis:7-alpine
+    container_name: codelab-redis
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 64mb
+      - --maxmemory-policy
+      - allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    mem_limit: 100m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.3.1
+    container_name: codelab-mq-namesrv
+    command: sh mqnamesrv
+    environment:
+      JAVA_OPT_EXT: "-Xms128m -Xmx128m -Xmn64m"
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${ROCKETMQ_NAMESRV_PORT:-9876}:9876"
+    mem_limit: 200m
+    restart: unless-stopped
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.1
+    container_name: codelab-mq-broker
+    command: sh mqbroker -c /home/rocketmq/conf/broker.conf
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+      JAVA_OPT_EXT: "-Xms256m -Xmx512m -Xmn256m"
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./rocketmq/broker.conf:/home/rocketmq/conf/broker.conf:ro
+    ports:
+      - "${ROCKETMQ_BROKER_PORT:-10911}:10911"
+      - "10909:10909"
+    depends_on:
+      - rocketmq-namesrv
+    mem_limit: 500m
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: codelab-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?请在 .env 里设置 MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?请在 .env 里设置 MINIO_ROOT_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+    mem_limit: 200m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:

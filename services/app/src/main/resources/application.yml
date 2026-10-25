@@ -1,0 +1,41 @@
+server:
+  port: ${APP_PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-stacktrace: never
+
+spring:
+  application:
+    name: codelab-app
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/codelab}
+    username: ${SPRING_DATASOURCE_USERNAME:codelab}
+    password: ${SPRING_DATASOURCE_PASSWORD:codelab}
+    hikari:
+      maximum-pool-size: 8      # 2C4G：连接池不贪多
+      minimum-idle: 2
+      connection-timeout: 5000
+
+app:
+  jwt:
+    # 生产必须替换（>=32 字符）；dev 默认值仅供本机
+    secret: ${APP_JWT_SECRET:dev_only_change_me_please_32bytes_min_secret}
+    issuer: codelab
+    access-ttl: 2h
+    refresh-ttl: 7d
+  admin:
+    email: ${APP_ADMIN_EMAIL:admin@example.edu}
+    password: ${APP_ADMIN_PASSWORD:Admin@12345}
+  migration:
+    # 容器内 /app/db；本机直跑时按相对路径自动探测 ../../deploy/db
+    dir: ${APP_DB_MIGRATION_DIR:}
+  security:
+    # 纯 HTTP 环境下必须 false，否则浏览器不存 refresh cookie
+    cookie-secure: ${APP_COOKIE_SECURE:false}
+  cors:
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+
+logging:
+  level:
+    root: INFO
+    com.codelab.app: ${APP_LOG_LEVEL:INFO}
