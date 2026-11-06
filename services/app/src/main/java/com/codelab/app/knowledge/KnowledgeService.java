@@ -39,9 +39,6 @@ public class KnowledgeService {
 
     public void update(UUID teacherId, UUID id, String title, String contentMd, List<String> tags) {
         KnowledgeRepository.EntryRow entry = requireOwned(teacherId, id);
-        if (!"draft".equals(entry.status())) {
-            throw ApiException.conflict("KNOWLEDGE_LOCKED", "已发布的条目不能直接改，请另建一条或先归档");
-        }
         validate(title, contentMd);
         knowledge.update(id, title.trim(), contentMd, normalizeTags(tags));
         audit.record(teacherId, AuditActions.KNOWLEDGE_UPDATE, "knowledge:" + id, Map.of("title", title.trim()));

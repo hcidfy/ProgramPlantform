@@ -144,7 +144,7 @@ public class AiAnswerService {
                 : response.usage();
 
         persist(studentId, problem.id(), submission.id(), task, level, question, payload, response, usage);
-        quotas.charge(studentId, problemId, task, level, submission.id(), usage.promptTokens(),
+        quotas.charge(studentId, problemId, problem.courseId(), task, level, submission.id(), usage.promptTokens(),
                 usage.completionTokens(), true, false);
         cache.put(cacheKey, new AiCacheService.CachedAnswer(payload, usage, template.version(),
                 java.time.Instant.now()));

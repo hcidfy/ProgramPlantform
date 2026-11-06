@@ -1,6 +1,7 @@
 package com.codelab.app.org;
 
 import com.codelab.app.audit.AuditActions;
+import com.codelab.app.audit.AuditService;
 import com.codelab.app.auth.AuthService;
 import com.codelab.app.auth.UserImportService;
 import com.codelab.app.auth.UserRepository;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,13 +35,15 @@ public class AdminOrgController {
     private final AuthService auth;
     private final UserRepository users;
     private final UserImportService importService;
+    private final AuditService audit;
 
     public AdminOrgController(OrgService org, AuthService auth, UserRepository users,
-            UserImportService importService) {
+            UserImportService importService, AuditService audit) {
         this.org = org;
         this.auth = auth;
         this.users = users;
         this.importService = importService;
+        this.audit = audit;
     }
 
     public record IdResponse(UUID id) {
@@ -53,7 +57,7 @@ public class AdminOrgController {
     }
 
     public record CreateClassRequest(@NotBlank @Size(max = 64) String name, Integer gradeYear,
-            @Size(max = 64) String major) {
+            @Size(max = 64) String major, @NotNull UUID homeroomTeacherId) {
     }
 
     public record CreateCourseRequest(@NotBlank @Size(max = 32) String code, @NotBlank @Size(max = 128) String name,
@@ -66,6 +70,7 @@ public class AdminOrgController {
 
     public record EnrollRequest(@NotNull UUID studentId, @NotNull UUID classId) {
     }
+    public record UserStatusRequest(@NotBlank @Pattern(regexp = "active|suspended") String status) { }
 
     // ---------------- 账号 ----------------
 
@@ -91,6 +96,18 @@ public class AdminOrgController {
         return ResponseEntity.status(201).body(new IdResponse(view.id()));
     }
 
+    @PutMapping("/users/{id}/status")
+    public ResponseEntity<Void> setUserStatus(@PathVariable UUID id, @Valid @RequestBody UserStatusRequest req) {
+        UUID actorId = SecurityUtils.require().id();
+        if (id.equals(actorId)) throw com.codelab.app.common.ApiException.validation("不能停用当前管理员账号");
+        var target = users.findById(id).orElseThrow(() -> com.codelab.app.common.ApiException.notFound("账号不存在"));
+        if ("admin".equals(target.role())) throw com.codelab.app.common.ApiException.validation("不能从此页面停用管理员账号");
+        users.setStatus(id, req.status());
+        audit.record(actorId, AuditActions.ADMIN_USER_STATUS_UPDATE, "user:" + id,
+                java.util.Map.of("status", req.status()));
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping(value = "/users/import", consumes = {"text/csv", "text/plain"})
     public UserImportService.ImportResult importUsers(@RequestBody String csv) {
         return importService.importCsv(SecurityUtils.require().id(), csv);
@@ -105,7 +122,7 @@ public class AdminOrgController {
 
     @PostMapping("/school-classes")
     public ResponseEntity<IdResponse> createClass(@Valid @RequestBody CreateClassRequest req) {
-        UUID id = org.createClass(SecurityUtils.require().id(), req.name(), req.gradeYear(), req.major());
+        UUID id = org.createClass(SecurityUtils.require().id(), req.name(), req.gradeYear(), req.major(), req.homeroomTeacherId());
         return ResponseEntity.status(201).body(new IdResponse(id));
     }
 

@@ -35,7 +35,7 @@ public class OrgService {
 
     // ---------------- 管理端 ----------------
 
-    public UUID createClass(UUID actorId, String name, Integer gradeYear, String major) {
+    public UUID createClass(UUID actorId, String name, Integer gradeYear, String major, UUID homeroomTeacherId) {
         String trimmed = name == null ? "" : name.trim();
         if (trimmed.isEmpty()) {
             throw ApiException.validation("班级名称不能为空");
@@ -43,9 +43,14 @@ public class OrgService {
         if (org.findClassByName(trimmed).isPresent()) {
             throw ApiException.conflict("CLASS_EXISTS", "班级已存在：" + trimmed);
         }
-        UUID id = org.insertClass(trimmed, gradeYear, major == null ? null : major.trim());
+        UserRepository.UserRow teacher = users.findById(homeroomTeacherId)
+                .orElseThrow(() -> ApiException.validation("班主任账号不存在"));
+        if (!"teacher".equals(teacher.role()) || !teacher.isActive()) {
+            throw ApiException.validation("班主任必须是启用状态的教师账号");
+        }
+        UUID id = org.insertClass(trimmed, gradeYear, major == null ? null : major.trim(), homeroomTeacherId);
         audit.record(actorId, AuditActions.ADMIN_CREATE_CLASS, "school_class:" + id,
-                Map.of("name", trimmed, "gradeYear", gradeYear == null ? "" : gradeYear));
+                Map.of("name", trimmed, "gradeYear", gradeYear == null ? "" : gradeYear, "homeroomTeacherId", homeroomTeacherId));
         return id;
     }
 
@@ -70,8 +75,8 @@ public class OrgService {
         org.findCourseById(courseId).orElseThrow(() -> ApiException.validation("课程不存在"));
         UserRepository.UserRow teacher = users.findById(teacherId)
                 .orElseThrow(() -> ApiException.validation("教师账号不存在"));
-        if (!"teacher".equals(teacher.role())) {
-            throw ApiException.validation("该账号不是教师：" + teacher.email());
+        if (!"teacher".equals(teacher.role()) || !teacher.isActive()) {
+            throw ApiException.validation("任课教师必须是启用状态的教师账号：" + teacher.email());
         }
         if (org.teachingClassExists(classId, courseId, term.trim())) {
             throw ApiException.conflict("TEACHING_CLASS_EXISTS", "同一班级同一课程同一学期已存在教学班");
@@ -129,8 +134,9 @@ public class OrgService {
     public void deleteCourse(UUID actorId, UUID courseId) {
         org.findCourseById(courseId).orElseThrow(() -> ApiException.notFound("课程不存在"));
         long teachingClasses = org.countTeachingClassesByCourse(courseId);
-        if (teachingClasses > 0) {
-            throw ApiException.conflict("COURSE_IN_USE", "该课程还有 " + teachingClasses + " 个教学班，先删教学班");
+        long history = org.countCourseHistory(courseId);
+        if (teachingClasses > 0 || history > 0) {
+            throw ApiException.conflict("COURSE_IN_USE", "该课程仍有 " + teachingClasses + " 个教学班或 " + history + " 条题目/知识/问答历史，不能删除");
         }
         org.deleteCourse(courseId);
         audit.record(actorId, AuditActions.ADMIN_DELETE_COURSE, "course:" + courseId, Map.of("courseId", courseId));
@@ -138,6 +144,10 @@ public class OrgService {
 
     public void deleteTeachingClass(UUID actorId, UUID teachingClassId) {
         org.findTeachingClassById(teachingClassId).orElseThrow(() -> ApiException.notFound("教学班不存在"));
+        long assignments = org.countAssignmentsByTeachingClass(teachingClassId);
+        if (assignments > 0) {
+            throw ApiException.conflict("TEACHING_CLASS_IN_USE", "该教学班已有 " + assignments + " 份作业，不能删除；请保留历史教学数据");
+        }
         org.deleteTeachingClass(teachingClassId);
         audit.record(actorId, AuditActions.ADMIN_DELETE_TEACHING_CLASS, "teaching_class:" + teachingClassId,
                 Map.of("teachingClassId", teachingClassId));

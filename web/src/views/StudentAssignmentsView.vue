@@ -63,8 +63,8 @@ onMounted(load)
             <td class="right">
               <router-link :to="`/student/assignments/${view.assignment.id}`">查看作业</router-link>
               ·
-              <router-link :to="`/student/problems/${problem.problemId}?assignmentId=${view.assignment.id}`">
-                去做题
+              <router-link :to="view.expired ? `/student/problems/${problem.problemId}` : `/student/problems/${problem.problemId}?assignmentId=${view.assignment.id}`">
+                {{ view.expired ? '练习（不计入作业）' : '去做题' }}
               </router-link>
             </td>
           </tr>

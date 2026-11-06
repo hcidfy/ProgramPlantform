@@ -37,7 +37,7 @@ app:
     # 纯 HTTP 环境下必须 false，否则浏览器不存 refresh cookie
     cookie-secure: ${APP_COOKIE_SECURE:false}
   cors:
-    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:8088,http://127.0.0.1:8088}
 
   # 文件存储：minio（生产）/ local（仅开发，见 PRD §14.1 D2）
   storage:
@@ -78,6 +78,9 @@ app:
     # 配额默认值（没有 ai_quotas 覆盖时生效）；单题次数按 PRD §5.3"合计口径"
     default-daily-tokens: ${APP_AI_DEFAULT_DAILY_TOKENS:30000}
     default-per-problem-calls: ${APP_AI_DEFAULT_PER_PROBLEM_CALLS:10}
+    # 月费用估算费率：分/百万 token；0 表示未配置，仪表盘不展示虚假的 0 元
+    input-price-cents-per-million: ${APP_AI_INPUT_PRICE_CENTS_PER_MILLION:0}
+    output-price-cents-per-million: ${APP_AI_OUTPUT_PRICE_CENTS_PER_MILLION:0}
 
 logging:
   level:

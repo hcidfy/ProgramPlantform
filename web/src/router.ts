@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { ensureSession, homeFor, session } from './session'
 import AdminHomeView from './views/AdminHomeView.vue'
+import AdminAiView from './views/AdminAiView.vue'
+import AdminAuditView from './views/AdminAuditView.vue'
 import LoginView from './views/LoginView.vue'
 import StudentCoursesView from './views/StudentCoursesView.vue'
 import StudentAssignmentsView from './views/StudentAssignmentsView.vue'
@@ -39,7 +41,13 @@ const router = createRouter({
     { path: '/teacher/assignments/:id', component: TeacherAssignmentDetailView, meta: { role: 'teacher' } },
     { path: '/teacher/knowledge', component: TeacherKnowledgeView, meta: { role: 'teacher' } },
 
-    { path: '/admin', component: AdminHomeView, meta: { role: 'admin' } },
+    { path: '/admin', redirect: '/admin/classes', meta: { role: 'admin' } },
+    { path: '/admin/classes', component: AdminHomeView, meta: { role: 'admin' } },
+    { path: '/admin/teachers', component: AdminHomeView, meta: { role: 'admin' } },
+    { path: '/admin/courses', component: AdminHomeView, meta: { role: 'admin' } },
+    { path: '/admin/teaching-classes', component: AdminHomeView, meta: { role: 'admin' } },
+    { path: '/admin/ai', component: AdminAiView, meta: { role: 'admin' } },
+    { path: '/admin/audit-logs', component: AdminAuditView, meta: { role: 'admin' } },
     { path: '/:pathMatch(.*)*', redirect: '/login' }
   ]
 })

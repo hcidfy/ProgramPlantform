@@ -79,9 +79,22 @@ public class AiChatService {
             history = conversations.listMessages(targetConversation, HISTORY_MESSAGES);
         }
 
-        quotas.assertDailyTokens(studentId);
-
         List<KnowledgeRepository.EntryRow> entries = knowledge.search(courseId, question, TOP_ENTRIES);
+        if (entries.isEmpty()) {
+            String reply = "课程资料暂未覆盖这个问题。你可以换用课程资料中的术语提问，或联系教师补充对应知识条目。";
+            try {
+                UUID conversation = targetConversation != null ? targetConversation
+                        : conversations.create(studentId, "chat", courseId, null, null, null);
+                conversations.insertMessage(conversation, "user", JsonMini.toJson(Map.of("text", question)), question, 0);
+                conversations.insertMessage(conversation, "assistant", JsonMini.toJson(Map.of("text", reply)), reply, 0);
+                targetConversation = conversation;
+            } catch (RuntimeException ex) {
+                log.warn("无知识命中时会话落库失败 course={}: {}", courseId, ex.getMessage());
+            }
+            return new ChatAnswer(targetConversation, List.of(reply), List.of(), true,
+                    new AiClient.AiResponse.Usage(0, 0), false, null, true);
+        }
+        quotas.assertDailyTokens(studentId);
         int promptVersion = prompts.findActive("chat")
                 .map(PromptTemplateRepository.PromptTemplate::version).orElse(1);
         PromptTemplateRepository.PromptTemplate template = prompts.findActive("chat")
@@ -140,7 +153,7 @@ public class AiChatService {
             log.warn("知识问答会话落库失败 course={}: {}", courseId, ex.getMessage());
         }
 
-        quotas.charge(studentId, null, "chat", null, null, usage.promptTokens(), usage.completionTokens(), true,
+        quotas.charge(studentId, null, courseId, "chat", null, null, usage.promptTokens(), usage.completionTokens(), true,
                 false);
         audit.record(studentId, AuditActions.AI_CALL, "course:" + courseId,
                 Map.of("task", "chat", "entries", entries.size(), "uncertain", uncertain));

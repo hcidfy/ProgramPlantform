@@ -66,13 +66,17 @@ onMounted(load)
     </div>
 
     <div v-if="selected" class="card">
+      <div class="toolbar">
       <h2>课程详情</h2>
+      <button class="link" type="button" @click="selected = null">关闭</button>
+      </div>
       <div class="card-title">{{ selected.courseName }}（{{ selected.courseCode }}）</div>
       <p class="meta">{{ selected.courseDescription || '暂无课程简介' }}</p>
       <p class="meta">
         班级 {{ selected.className }} · 教师 {{ selected.teacherName }} · 学期 {{ selected.term }} ·
         已入班 {{ selected.studentCount }} 人
       </p>
+      <p class="meta">“AI 验收”是 M3 验收用的演示课程说明，不代表课程已接入真实 AI 或已经完成验收。</p>
     </div>
   </template>
 </template>

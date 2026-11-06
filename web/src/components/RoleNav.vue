@@ -19,7 +19,11 @@ const links = computed(() => {
         { to: '/teacher/knowledge', label: '知识库' }
       ]
     case 'admin':
-      return [{ to: '/admin', label: '管理端' }]
+      return [
+        { to: '/admin/classes', label: '组织管理' },
+        { to: '/admin/ai', label: 'AI 配额与用量' },
+        { to: '/admin/audit-logs', label: '操作日志' }
+      ]
     default:
       return []
   }

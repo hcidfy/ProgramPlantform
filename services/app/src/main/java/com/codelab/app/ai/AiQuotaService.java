@@ -51,6 +51,10 @@ public class AiQuotaService {
         return ai == null || ai.defaultPerProblemCalls() <= 0 ? DEFAULT_PER_PROBLEM_CALLS : ai.defaultPerProblemCalls();
     }
 
+    public Limits configuredDefaults() {
+        return new Limits(defaultDailyTokens(), defaultPerProblemCalls());
+    }
+
     public Limits limits(UUID studentId, UUID problemId) {
         Optional<AiQuotaRepository.QuotaRow> studentScope = quotas.find("student", studentId);
         if (studentScope.isPresent()) {
@@ -101,10 +105,10 @@ public class AiQuotaService {
         }
     }
 
-    public void charge(UUID studentId, UUID problemId, String task, Integer level, UUID submissionId,
+    public void charge(UUID studentId, UUID problemId, UUID courseId, String task, Integer level, UUID submissionId,
             int promptTokens, int completionTokens, boolean charged, boolean cached) {
-        quotas.insertCall(studentId, problemId, task, level, submissionId, promptTokens, completionTokens, charged,
-                cached);
+        quotas.insertCall(studentId, problemId, courseId, task, level, submissionId, promptTokens, completionTokens,
+                charged, cached);
         if (charged) {
             quotas.addUsage(studentId, task, promptTokens, completionTokens);
         }

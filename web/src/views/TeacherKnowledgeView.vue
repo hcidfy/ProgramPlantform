@@ -178,10 +178,10 @@ onMounted(load)
         </td>
         <td class="meta">{{ formatTime(entry.updatedAt) }}</td>
         <td class="right">
-          <button v-if="entry.status === 'draft'" class="link" type="button" @click="edit(entry)">编辑</button>
+          <button class="link" type="button" @click="edit(entry)">编辑</button>
           <button v-if="entry.status === 'draft'" class="link" type="button" @click="publish(entry.id)">发布</button>
           <button v-if="entry.status === 'draft'" class="link" type="button" @click="remove(entry.id)">删除</button>
-          <span v-if="entry.status !== 'draft'" class="meta">已发布不可改</span>
+          <span v-if="entry.status !== 'draft'" class="meta">修改后仍保持发布状态，新问答会使用最新内容</span>
         </td>
       </tr>
     </tbody>

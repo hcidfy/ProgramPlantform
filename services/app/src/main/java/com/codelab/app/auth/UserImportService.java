@@ -50,6 +50,9 @@ public class UserImportService {
         boolean firstDataLine = true;
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i].trim();
+            if (i == 0 && line.startsWith("\uFEFF")) {
+                line = line.substring(1).trim();
+            }
             if (line.isEmpty()) {
                 continue;
             }

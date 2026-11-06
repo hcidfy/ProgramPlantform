@@ -155,4 +155,9 @@ public class UserRepository {
                 .query(MAPPER)
                 .list();
     }
+
+    public int setStatus(UUID id, String status) {
+        return jdbc.sql("UPDATE users SET status=:status, updated_at=now() WHERE id=:id")
+                .param("id", id).param("status", status).update();
+    }
 }

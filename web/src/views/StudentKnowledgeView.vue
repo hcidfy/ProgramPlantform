@@ -69,7 +69,9 @@ async function ask() {
     await loadConversations()
     await loadMessages(result.conversationId)
     if (result.usage) {
-      notice.value = `本次消耗 ${result.usage.promptTokens + result.usage.completionTokens} tokens`
+      notice.value = result.noEntries
+        ? '课程资料未命中，本次没有调用模型，也没有消耗 token。'
+        : `本次消耗 ${result.usage.promptTokens + result.usage.completionTokens} tokens`
     }
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : '提问失败'

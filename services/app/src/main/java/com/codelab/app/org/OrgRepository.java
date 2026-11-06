@@ -11,7 +11,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class OrgRepository {
 
-    public record SchoolClassRow(UUID id, String name, Integer gradeYear, String major) {
+    public record SchoolClassRow(UUID id, String name, Integer gradeYear, String major, UUID homeroomTeacherId,
+            String homeroomTeacherName) {
     }
 
     public record CourseRow(UUID id, String code, String name, String description) {
@@ -60,36 +61,37 @@ public class OrgRepository {
     // ---------------- 学校班级 ----------------
 
     public List<SchoolClassRow> listClasses() {
-        return jdbc.sql("SELECT id, name, grade_year, major FROM school_classes ORDER BY name")
+        return jdbc.sql("SELECT sc.id, sc.name, sc.grade_year, sc.major, sc.homeroom_teacher_id, u.display_name homeroom_teacher_name FROM school_classes sc LEFT JOIN users u ON u.id=sc.homeroom_teacher_id ORDER BY sc.name")
                 .query((rs, i) -> new SchoolClassRow(rs.getObject("id", UUID.class), rs.getString("name"),
-                        rs.getObject("grade_year", Integer.class), rs.getString("major")))
+                        rs.getObject("grade_year", Integer.class), rs.getString("major"), rs.getObject("homeroom_teacher_id", UUID.class), rs.getString("homeroom_teacher_name")))
                 .list();
     }
 
     public Optional<SchoolClassRow> findClassById(UUID id) {
-        return jdbc.sql("SELECT id, name, grade_year, major FROM school_classes WHERE id = :id")
+        return jdbc.sql("SELECT sc.id, sc.name, sc.grade_year, sc.major, sc.homeroom_teacher_id, u.display_name homeroom_teacher_name FROM school_classes sc LEFT JOIN users u ON u.id=sc.homeroom_teacher_id WHERE sc.id = :id")
                 .param("id", id)
                 .query((rs, i) -> new SchoolClassRow(rs.getObject("id", UUID.class), rs.getString("name"),
-                        rs.getObject("grade_year", Integer.class), rs.getString("major")))
+                        rs.getObject("grade_year", Integer.class), rs.getString("major"), rs.getObject("homeroom_teacher_id", UUID.class), rs.getString("homeroom_teacher_name")))
                 .optional();
     }
 
     public Optional<SchoolClassRow> findClassByName(String name) {
-        return jdbc.sql("SELECT id, name, grade_year, major FROM school_classes WHERE name = :name")
+        return jdbc.sql("SELECT sc.id, sc.name, sc.grade_year, sc.major, sc.homeroom_teacher_id, u.display_name homeroom_teacher_name FROM school_classes sc LEFT JOIN users u ON u.id=sc.homeroom_teacher_id WHERE sc.name = :name")
                 .param("name", name)
                 .query((rs, i) -> new SchoolClassRow(rs.getObject("id", UUID.class), rs.getString("name"),
-                        rs.getObject("grade_year", Integer.class), rs.getString("major")))
+                        rs.getObject("grade_year", Integer.class), rs.getString("major"), rs.getObject("homeroom_teacher_id", UUID.class), rs.getString("homeroom_teacher_name")))
                 .optional();
     }
 
-    public UUID insertClass(String name, Integer gradeYear, String major) {
+    public UUID insertClass(String name, Integer gradeYear, String major, UUID homeroomTeacherId) {
         return jdbc.sql("""
-                        INSERT INTO school_classes (name, grade_year, major)
-                        VALUES (:name, :gradeYear, :major) RETURNING id
+                        INSERT INTO school_classes (name, grade_year, major, homeroom_teacher_id)
+                        VALUES (:name, :gradeYear, :major, :teacherId) RETURNING id
                         """)
                 .param("name", name)
                 .param("gradeYear", gradeYear)
                 .param("major", major)
+                .param("teacherId", homeroomTeacherId)
                 .query(UUID.class)
                 .single();
     }
@@ -348,6 +350,19 @@ public class OrgRepository {
                 .param("courseId", courseId)
                 .query(Long.class)
                 .single();
+    }
+
+    public long countCourseHistory(UUID courseId) {
+        return jdbc.sql("""
+                SELECT (SELECT count(*) FROM problems WHERE course_id=:id)
+                     + (SELECT count(*) FROM knowledge_entries WHERE course_id=:id)
+                     + (SELECT count(*) FROM ai_conversations WHERE course_id=:id)
+                """).param("id", courseId).query(Long.class).single();
+    }
+
+    public long countAssignmentsByTeachingClass(UUID teachingClassId) {
+        return jdbc.sql("SELECT count(*) FROM assignments WHERE teaching_class_id=:id")
+                .param("id", teachingClassId).query(Long.class).single();
     }
 
     /** 返回受影响行数（0 = 已不存在）。 */
